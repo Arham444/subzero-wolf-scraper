@@ -36,7 +36,7 @@ cd subzero_scraper
 ```bash
 scrapy crawl subzero_wolf
 ```
-4. Ctrl+C to initiate Shutdown, and have it save what it got to output.json
+4. Ctrl+C to initiate Shutdown, and have it save what it got be outputed to output.json
 
 The output will be saved to `output.json`.
 
