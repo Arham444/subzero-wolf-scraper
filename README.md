@@ -36,6 +36,7 @@ cd subzero_scraper
 ```bash
 scrapy crawl subzero_wolf
 ```
+4. Ctrl+C to initiate Shutdown, and have it save what it got be outputed to output.json
 
 The output will be saved to a timestamped file (e.g., `subzero_wolf_2023-10-27T10-30-00.json`) to prevent overwriting previous data.
 
