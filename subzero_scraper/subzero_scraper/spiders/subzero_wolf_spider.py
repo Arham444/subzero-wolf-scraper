@@ -18,9 +18,9 @@ class SubZeroWolfSpider(SitemapSpider):
 
     custom_settings = {
         "FEEDS": {
-            "output.json": {
+            "subzero_wolf_%(time)s.json": {
                 "format": "json",
-                "overwrite": True,
+                "overwrite": False,
                 "indent": 2,
             },
         },

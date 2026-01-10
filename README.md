@@ -36,9 +36,18 @@ cd subzero_scraper
 ```bash
 scrapy crawl subzero_wolf
 ```
-4. Ctrl+C to initiate Shutdown, and have it save what it got to output.json
 
-The output will be saved to `output.json`.
+The output will be saved to a timestamped file (e.g., `subzero_wolf_2023-10-27T10-30-00.json`) to prevent overwriting previous data.
+
+### Resuming a Stopped Crawl
+
+To start a crawler that you can pause and resume later without losing progress, use a job directory:
+
+```bash
+scrapy crawl subzero_wolf -s JOBDIR=crawls/subzero-job-1
+```
+
+If you stop the spider (Ctrl+C), running this command again will resume exactly where it left off, and new data will be appended to the existing output file if you configure it manually or merged later. Note that with timestamped files, each run creates a new file. You can simply concatenate them later: `jq -s 'add' *.json > combined.json` (Linux/Mac) or manual method (Windows).
 
 ## Data Structure
 
