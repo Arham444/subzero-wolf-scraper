@@ -6,7 +6,7 @@ import re
 class SubZeroWolfSpider(SitemapSpider):
     name = "subzero_wolf"
     allowed_domains = ["subzero-wolf.com"]
-    # We use the US sitemap directly to ensure we get the correct region's links
+    # SiteMap Index
     sitemap_urls = ["https://www.subzero-wolf.com/sitemap-US.xml"]
 
     sitemap_rules = [
@@ -56,8 +56,6 @@ class SubZeroWolfSpider(SitemapSpider):
             brand = "Cove"
 
         model = self.extract_model_number(response)
-
-        # Skip pages that don't appear to be products
         if model == "UNKNOWN":
             return
 
@@ -65,22 +63,14 @@ class SubZeroWolfSpider(SitemapSpider):
         product_lang = self.extract_language(response)
         thumb = self.extract_thumbnail(response)
 
-        source = response.css("title::text").get()
-        source = (
-            source.strip()
-            if source
-            else "Sub-Zero, Wolf, and Cove | Kitchen Appliances that Inspire"
+        source = "Sub-Zero, Wolf, and Cove | Kitchen Appliances that Inspire"
+        pdf_elements = response.xpath(
+            '//a[contains(translate(@href, "PDF", "pdf"), ".pdf") or contains(translate(., "PDF", "pdf"), "(pdf)")]'
         )
 
-        # Find documents. Try generic PDF suffix first.
-        pdf_links = response.css('a[href$=".pdf"]::attr(href)').getall()
-        if not pdf_links:
-            pdf_links = response.xpath('//a[contains(@href, ".pdf")]/@href').getall()
-
-        documents = self.categorize_documents(pdf_links, response)
+        documents = self.categorize_documents(pdf_elements, response)
 
         if documents:
-            # Yield one item per document type
             for doc_type, urls in documents.items():
                 yield {
                     "model": model,
@@ -95,7 +85,6 @@ class SubZeroWolfSpider(SitemapSpider):
                     "domain": "subzero-wolf.com",
                 }
         else:
-            # Yield item even if no documents found
             yield {
                 "model": model,
                 "brand": brand,
@@ -111,18 +100,31 @@ class SubZeroWolfSpider(SitemapSpider):
 
     def extract_model_number(self, response):
         model = response.css('.model-number::text, [class*="model"]::text').get()
-
+        if model:
+            model = model.strip()
+            if "model" in model.lower() or "#" in model:
+                model = None
         if not model:
-            title = response.css("h1::text").get()
-            if title:
-                match = re.search(r"\b([A-Z]{2,}\d{3,}[A-Z]?)\b", title)
+            title = response.css("title::text").get()
+            heading = response.css("h1::text").get()
+            text_to_search = (title or "") + " " + (heading or "")
+            paren_match = re.search(r"\(([A-Z]+[-]?\d+[A-Z0-9/-]*)\)", text_to_search)
+            if paren_match:
+                model = paren_match.group(1)
+            else:
+                match = re.search(
+                    r"\b([A-Z]{2,}[-]?\d{3,}[A-Z0-9/-]*)\b", text_to_search
+                )
                 if match:
                     model = match.group(1)
-
         if not model:
-            url_match = re.search(r"/([A-Z]{2,}\d{3,}[A-Z]?)\b", response.url)
+            url_match = re.search(
+                r"/([A-Z]{2,}[-]?\d{3,}[A-Z0-9/-]*)$",
+                response.url.rstrip("/"),
+                re.IGNORECASE,
+            )
             if url_match:
-                model = url_match.group(1)
+                model = url_match.group(1).upper()
 
         return model.strip() if model else "UNKNOWN"
 
@@ -188,29 +190,48 @@ class SubZeroWolfSpider(SitemapSpider):
 
         return response.urljoin(thumb) if thumb else ""
 
-    def categorize_documents(self, pdf_links, response):
+    def categorize_documents(self, pdf_elements, response):
         documents = {}
 
-        for pdf_link in pdf_links:
+        for element in pdf_elements:
+            try:
+                pdf_link = element.css("::attr(href)").get()
+                link_text = element.css("::text").get() or ""
+            except AttributeError:
+                continue
+
+            if not pdf_link:
+                continue
+
             full_url = response.urljoin(pdf_link)
             pdf_lower = pdf_link.lower()
+            text_lower = link_text.lower()
 
-            if any(
-                x in pdf_lower
-                for x in ["user", "care", "guide", "manual", "instruction"]
+            search_text = text_lower + " " + pdf_lower
+
+            if "install" in search_text:
+                doc_type = "Installation Guide"
+            elif any(
+                x in search_text
+                for x in ["spec", "specification", "dimension", "sheet", "design"]
+            ):
+                doc_type = "Specs & Manuals"
+            elif any(x in search_text for x in ["energy", "star"]):
+                doc_type = "Energy Guide"
+            elif "warranty" in search_text:
+                doc_type = "Warranty"
+            elif any(
+                x in search_text
+                for x in ["user", "care", "guide", "manual", "instruction", "use"]
             ):
                 doc_type = "User and Care Guide"
-            elif any(x in pdf_lower for x in ["spec", "specification", "dimension"]):
-                doc_type = "Specs & Manuals"
-            elif "install" in pdf_lower:
-                doc_type = "Installation Guide"
-            elif "warranty" in pdf_lower:
-                doc_type = "Warranty"
             else:
                 doc_type = "Documentation"
 
             if doc_type not in documents:
                 documents[doc_type] = []
-            documents[doc_type].append(full_url)
+
+            if full_url not in documents[doc_type]:
+                documents[doc_type].append(full_url)
 
         return documents
